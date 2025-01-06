@@ -1,251 +1,284 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>PDF to Excel Converter</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            max-width: 800px; 
-            margin: 20px auto; 
-            padding: 0 20px; 
-        }
-        .drop-zone {
-            width: 100%;
-            height: 200px;
-            border: 2px dashed #ccc;
-            border-radius: 4px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: 20px 0;
-            cursor: pointer;
-        }
-        .drop-zone:hover {
-            border-color: #0066cc;
-        }
-        .drop-zone.dragover {
-            background: #e1f0ff;
-            border-color: #0066cc;
-        }
-        #extractedText {
-            width: 100%;
-            height: 200px;
-            margin: 20px 0;
-            display: none;
-        }
-        button { 
-            padding: 10px 20px; 
-            background: #0066cc; 
-            color: white; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer; 
-            margin: 5px;
-        }
-        button:hover { 
-            background: #0052a3; 
-        }
-        #status {
-            margin: 20px 0;
-            padding: 10px;
-            border-radius: 4px;
-        }
-        .success {
-            background: #e6ffe6;
-            color: #006600;
-        }
-        .error {
-            background: #ffe6e6;
-            color: #660000;
-        }
-    </style>
+  <meta charset="UTF-8"/>
+  <title>PDF to Excel Converter</title>
+
+  <!-- XLSX library for Excel generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  
+  <!-- PDF.js library for PDF parsing -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+  <style>
+    body { 
+      font-family: Arial, sans-serif; 
+      max-width: 800px; 
+      margin: 20px auto; 
+      padding: 0 20px; 
+    }
+    h1 {
+      text-align: center;
+    }
+    .drop-zone {
+      width: 100%;
+      height: 200px;
+      border: 2px dashed #ccc;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 20px 0;
+      cursor: pointer;
+      text-align: center;
+    }
+    .drop-zone:hover {
+      border-color: #0066cc;
+    }
+    .drop-zone.dragover {
+      background: #e1f0ff;
+      border-color: #0066cc;
+    }
+    button { 
+      padding: 10px 20px; 
+      background: #0066cc; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      cursor: pointer; 
+    }
+    button:hover { 
+      background: #0052a3; 
+    }
+    #status {
+      margin: 20px 0;
+      padding: 10px;
+      border-radius: 4px;
+    }
+    .success {
+      background: #e6ffe6;
+      color: #006600;
+    }
+    .error {
+      background: #ffe6e6;
+      color: #660000;
+    }
+  </style>
 </head>
 <body>
-    <h1>PDF to Excel Converter</h1>
-    
-    <div class="drop-zone" id="dropZone">
-        <div>
-            Drop PDF file here or click to upload
-            <input type="file" id="fileInput" accept=".pdf" style="display: none;">
-        </div>
+  <h1>PDF to Excel Converter</h1>
+
+  <div class="drop-zone" id="dropZone">
+    <div>
+      Drop PDF file here or click to upload
+      <input type="file" id="fileInput" accept=".pdf" style="display: none;">
     </div>
+  </div>
 
-    <textarea id="extractedText" readonly></textarea>
-    <div id="status"></div>
+  <div id="status"></div>
 
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  <script>
+    // PDF.js setup
+    // Update the workerSrc if needed or if you host it differently.
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-        function processLine(line) {
-            // Match pattern: Product name, Division, Product code, and prices
-            const regex = /^([^0-9]+?)\s+(\d{4})\s+([\w\-]+)\s+€\s*(\d+(?:\.\d+)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?/;
-            const match = line.match(regex);
-            
-            if (match) {
-                const [_, product, division, code, price1kg, price5kg, price10kg, price17_18kg, price20_25kg, price100kg] = match;
-                
-                const rows = [];
-                
-                // Only add rows for prices that exist
-                if (price1kg && !isNaN(parseFloat(price1kg))) {
-                    rows.push({
-                        'Product': product.trim(),
-                        'Product Code': code,
-                        'Quantity': '1kg',
-                        'Price (€/kg)': parseFloat(price1kg)
-                    });
-                }
-                if (price5kg && !isNaN(parseFloat(price5kg))) {
-                    rows.push({
-                        'Product': product.trim(),
-                        'Product Code': code,
-                        'Quantity': '5kg',
-                        'Price (€/kg)': parseFloat(price5kg)
-                    });
-                }
-                if (price10kg && !isNaN(parseFloat(price10kg))) {
-                    rows.push({
-                        'Product': product.trim(),
-                        'Product Code': code,
-                        'Quantity': '10kg',
-                        'Price (€/kg)': parseFloat(price10kg)
-                    });
-                }
-                if (price17_18kg && !isNaN(parseFloat(price17_18kg))) {
-                    rows.push({
-                        'Product': product.trim(),
-                        'Product Code': code,
-                        'Quantity': '17-18kg',
-                        'Price (€/kg)': parseFloat(price17_18kg)
-                    });
-                }
-                if (price20_25kg && !isNaN(parseFloat(price20_25kg))) {
-                    rows.push({
-                        'Product': product.trim(),
-                        'Product Code': code,
-                        'Quantity': '20-25kg',
-                        'Price (€/kg)': parseFloat(price20_25kg)
-                    });
-                }
-                if (price100kg && !isNaN(parseFloat(price100kg))) {
-                    rows.push({
-                        'Product': product.trim(),
-                        'Product Code': code,
-                        'Quantity': '100kg',
-                        'Price (€/kg)': parseFloat(price100kg)
-                    });
-                }
-                
-                return rows;
-            }
-            return [];
+    /**
+     * Adjust this function to match your PDF’s table format.
+     * Right now, it's set up to look for lines with:
+     *   [Product Name] [some 4-digit year or code?] [code] € [price1kg] € [price5kg] ...
+     * 
+     * If your PDF has different columns or structure, adapt the regex and row logic accordingly.
+     */
+    function processLine(line) {
+      // Example regex capturing product, year (or division), code, and multiple € prices
+      // Tweak or replace with your actual structure
+      const regex = /(\S+(?:\s+\S+)*?)\s+(\d{4})\s+([\w\-]+)\s+€\s*(\d+(?:\.\d+)?)\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*/;
+      const match = line.match(regex);
+
+      if (match) {
+        // Destructure matched groups; note some might be undefined if your PDF doesn’t have that column
+        const [
+          _,
+          product,
+          division, // or year
+          code,
+          price1kg,
+          price5kg,
+          price10kg,
+          price17_18kg,
+          price20_25kg,
+          price100kg
+        ] = match;
+
+        // Create a row for each valid price
+        const rows = [];
+
+        if (price1kg) {
+          rows.push({
+            'Product': product.trim(),
+            'Product Code': code,
+            'Quantity': '1kg',
+            'Price': parseFloat(price1kg)
+          });
+        }
+        if (price5kg) {
+          rows.push({
+            'Product': product.trim(),
+            'Product Code': code,
+            'Quantity': '5kg',
+            'Price': parseFloat(price5kg)
+          });
+        }
+        if (price10kg) {
+          rows.push({
+            'Product': product.trim(),
+            'Product Code': code,
+            'Quantity': '10kg',
+            'Price': parseFloat(price10kg)
+          });
+        }
+        if (price17_18kg) {
+          rows.push({
+            'Product': product.trim(),
+            'Product Code': code,
+            'Quantity': '17-18kg',
+            'Price': parseFloat(price17_18kg)
+          });
+        }
+        if (price20_25kg) {
+          rows.push({
+            'Product': product.trim(),
+            'Product Code': code,
+            'Quantity': '20-25kg',
+            'Price': parseFloat(price20_25kg)
+          });
+        }
+        if (price100kg) {
+          rows.push({
+            'Product': product.trim(),
+            'Product Code': code,
+            'Quantity': '100kg',
+            'Price': parseFloat(price100kg)
+          });
         }
 
-        async function extractTextFromPDF(file) {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdf = await pdfjsLib.getDocument({data: arrayBuffer}).promise;
-            let fullText = '';
-            
-            for(let i = 1; i <= pdf.numPages; i++) {
-                const page = await pdf.getPage(i);
-                const textContent = await page.getTextContent();
-                const pageText = textContent.items
-                    .map(item => item.str)
-                    .join(' ')
-                    .split(/(?<=€[\d.,]+)\s+/)
-                    .join('\n');
-                fullText += pageText + '\n';
+        return rows;
+      }
+      return [];
+    }
+
+    /**
+     * Extract text from the entire PDF (all pages).
+     * We concatenate page text with spaces; adapt as needed if your table data spans multiple lines.
+     */
+    async function extractTextFromPDF(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let fullText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        // Combine items with spaces – often helps keep columns more or less in the same line
+        const pageText = textContent.items.map(item => item.str).join(' ');
+        fullText += pageText + '\n';
+      }
+
+      return fullText;
+    }
+
+    /**
+     * Main function to handle dropped or uploaded file.
+     */
+    async function handleFile(file) {
+      const status = document.getElementById('status');
+      try {
+        status.textContent = 'Processing PDF...';
+        status.className = '';
+
+        // Extract all text from PDF
+        const text = await extractTextFromPDF(file);
+
+        // Split text by lines
+        const lines = text.split('\n');
+        const allRows = [];
+
+        // Go through each line, process if it looks like a valid row
+        lines.forEach(line => {
+          // Filter out known useless lines (headers, footers, disclaimers, etc.)
+          // Adjust your logic or checks here if needed
+          if (
+            line.trim() && 
+            !line.includes('CONFIDENTIAL') && 
+            !line.includes('Division Product code')
+          ) {
+            const rows = processLine(line);
+            if (rows.length > 0) {
+              allRows.push(...rows);
             }
-            
-            return fullText;
-        }
-
-        async function handleFile(file) {
-            try {
-                const status = document.getElementById('status');
-                const extractedTextArea = document.getElementById('extractedText');
-                status.textContent = 'Processing PDF...';
-                status.className = '';
-
-                const text = await extractTextFromPDF(file);
-                extractedTextArea.value = text;
-                extractedTextArea.style.display = 'block';
-
-                const lines = text.split('\n');
-                const allRows = [];
-                
-                lines.forEach(line => {
-                    if (line.trim() && 
-                        !line.includes('CONFIDENTIAL') && 
-                        !line.includes('Division Product code') &&
-                        !line.includes('COMMERCIAL POLICIES') &&
-                        !line.includes('For information:')) {
-                        const rows = processLine(line);
-                        if (rows.length > 0) {
-                            allRows.push(...rows);
-                        }
-                    }
-                });
-
-                if (allRows.length === 0) {
-                    throw new Error('No data was extracted. Please check the PDF format.');
-                }
-                
-                const wb = XLSX.utils.book_new();
-                const ws = XLSX.utils.json_to_sheet(allRows);
-                
-                // Format the headers
-                ws['!cols'] = [
-                    {width: 30}, // Product
-                    {width: 15}, // Product Code
-                    {width: 10}, // Quantity
-                    {width: 12}  // Price
-                ];
-                
-                XLSX.utils.book_append_sheet(wb, ws, "Price Breaks");
-                XLSX.writeFile(wb, 'price_breaks.xlsx');
-
-                status.textContent = `Excel file created successfully with ${allRows.length} entries!`;
-                status.className = 'success';
-            } catch (error) {
-                console.error(error);
-                status.textContent = 'Error processing PDF: ' + error.message;
-                status.className = 'error';
-            }
-        }
-
-        // Set up the drop zone
-        const dropZone = document.getElementById('dropZone');
-        const fileInput = document.getElementById('fileInput');
-
-        dropZone.addEventListener('click', () => fileInput.click());
-        
-        dropZone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropZone.classList.add('dragover');
+          }
         });
 
-        dropZone.addEventListener('dragleave', () => {
-            dropZone.classList.remove('dragover');
-        });
+        // Convert final rows into an Excel sheet
+        const wb = XLSX.utils.book_new();
+        const ws = XLSX.utils.json_to_sheet(allRows);
+        XLSX.utils.book_append_sheet(wb, ws, 'Price Breaks');
 
-        dropZone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropZone.classList.remove('dragover');
-            const file = e.dataTransfer.files[0];
-            if (file && file.type === 'application/pdf') {
-                handleFile(file);
-            }
-        });
+        // Save the Excel file
+        XLSX.writeFile(wb, 'price_breaks.xlsx');
 
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file && file.type === 'application/pdf') {
-                handleFile(file);
-            }
-        });
-    </script>
+        status.textContent = 'Excel file created successfully!';
+        status.className = 'success';
+      } catch (error) {
+        console.error(error);
+        status.textContent = 'Error processing PDF: ' + error.message;
+        status.className = 'error';
+      }
+    }
+
+    // Set up the drop zone
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+
+    // Click on drop zone triggers file input
+    dropZone.addEventListener('click', () => fileInput.click());
+
+    // Drag-over highlight
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('dragover');
+    });
+
+    // Drag-leave
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('dragover');
+    });
+
+    // Handle dropped file
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file && file.type === 'application/pdf') {
+        handleFile(file);
+      } else {
+        const status = document.getElementById('status');
+        status.textContent = 'Please drop a valid PDF file.';
+        status.className = 'error';
+      }
+    });
+
+    // Handle file selection via input
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file && file.type === 'application/pdf') {
+        handleFile(file);
+      } else {
+        const status = document.getElementById('status');
+        status.textContent = 'Please select a valid PDF file.';
+        status.className = 'error';
+      }
+    });
+  </script>
 </body>
 </html>
