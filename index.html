@@ -29,6 +29,12 @@
             background: #e1f0ff;
             border-color: #0066cc;
         }
+        #extractedText {
+            width: 100%;
+            height: 200px;
+            margin: 20px 0;
+            display: none;
+        }
         button { 
             padding: 10px 20px; 
             background: #0066cc; 
@@ -36,6 +42,7 @@
             border: none; 
             border-radius: 4px; 
             cursor: pointer; 
+            margin: 5px;
         }
         button:hover { 
             background: #0052a3; 
@@ -65,13 +72,15 @@
         </div>
     </div>
 
+    <textarea id="extractedText" readonly></textarea>
     <div id="status"></div>
 
     <script>
         pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
         function processLine(line) {
-            const regex = /(\S+(?:\s+\S+)*?)\s+(\d{4})\s+([\w\-]+)\s+€\s*(\d+(?:\.\d+)?)\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*(?:€\s*(\d+(?:\.\d+)?))?\s*/;
+            // Match pattern: Product name, Division, Product code, and prices
+            const regex = /^([^0-9]+?)\s+(\d{4})\s+([\w\-]+)\s+€\s*(\d+(?:\.\d+)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?(?:\s+€\s*(\d+(?:\.\d+)?)?)?/;
             const match = line.match(regex);
             
             if (match) {
@@ -79,52 +88,53 @@
                 
                 const rows = [];
                 
-                if (price1kg) {
+                // Only add rows for prices that exist
+                if (price1kg && !isNaN(parseFloat(price1kg))) {
                     rows.push({
                         'Product': product.trim(),
                         'Product Code': code,
                         'Quantity': '1kg',
-                        'Price': parseFloat(price1kg)
+                        'Price (€/kg)': parseFloat(price1kg)
                     });
                 }
-                if (price5kg) {
+                if (price5kg && !isNaN(parseFloat(price5kg))) {
                     rows.push({
                         'Product': product.trim(),
                         'Product Code': code,
                         'Quantity': '5kg',
-                        'Price': parseFloat(price5kg)
+                        'Price (€/kg)': parseFloat(price5kg)
                     });
                 }
-                if (price10kg) {
+                if (price10kg && !isNaN(parseFloat(price10kg))) {
                     rows.push({
                         'Product': product.trim(),
                         'Product Code': code,
                         'Quantity': '10kg',
-                        'Price': parseFloat(price10kg)
+                        'Price (€/kg)': parseFloat(price10kg)
                     });
                 }
-                if (price17_18kg) {
+                if (price17_18kg && !isNaN(parseFloat(price17_18kg))) {
                     rows.push({
                         'Product': product.trim(),
                         'Product Code': code,
                         'Quantity': '17-18kg',
-                        'Price': parseFloat(price17_18kg)
+                        'Price (€/kg)': parseFloat(price17_18kg)
                     });
                 }
-                if (price20_25kg) {
+                if (price20_25kg && !isNaN(parseFloat(price20_25kg))) {
                     rows.push({
                         'Product': product.trim(),
                         'Product Code': code,
                         'Quantity': '20-25kg',
-                        'Price': parseFloat(price20_25kg)
+                        'Price (€/kg)': parseFloat(price20_25kg)
                     });
                 }
-                if (price100kg) {
+                if (price100kg && !isNaN(parseFloat(price100kg))) {
                     rows.push({
                         'Product': product.trim(),
                         'Product Code': code,
                         'Quantity': '100kg',
-                        'Price': parseFloat(price100kg)
+                        'Price (€/kg)': parseFloat(price100kg)
                     });
                 }
                 
@@ -141,7 +151,11 @@
             for(let i = 1; i <= pdf.numPages; i++) {
                 const page = await pdf.getPage(i);
                 const textContent = await page.getTextContent();
-                const pageText = textContent.items.map(item => item.str).join(' ');
+                const pageText = textContent.items
+                    .map(item => item.str)
+                    .join(' ')
+                    .split(/(?<=€[\d.,]+)\s+/)
+                    .join('\n');
                 fullText += pageText + '\n';
             }
             
@@ -151,27 +165,49 @@
         async function handleFile(file) {
             try {
                 const status = document.getElementById('status');
+                const extractedTextArea = document.getElementById('extractedText');
                 status.textContent = 'Processing PDF...';
                 status.className = '';
 
                 const text = await extractTextFromPDF(file);
+                extractedTextArea.value = text;
+                extractedTextArea.style.display = 'block';
+
                 const lines = text.split('\n');
                 const allRows = [];
                 
                 lines.forEach(line => {
-                    if (line.trim() && !line.includes('CONFIDENTIAL') && !line.includes('Division Product code')) {
+                    if (line.trim() && 
+                        !line.includes('CONFIDENTIAL') && 
+                        !line.includes('Division Product code') &&
+                        !line.includes('COMMERCIAL POLICIES') &&
+                        !line.includes('For information:')) {
                         const rows = processLine(line);
-                        allRows.push(...rows);
+                        if (rows.length > 0) {
+                            allRows.push(...rows);
+                        }
                     }
                 });
+
+                if (allRows.length === 0) {
+                    throw new Error('No data was extracted. Please check the PDF format.');
+                }
                 
                 const wb = XLSX.utils.book_new();
                 const ws = XLSX.utils.json_to_sheet(allRows);
                 
+                // Format the headers
+                ws['!cols'] = [
+                    {width: 30}, // Product
+                    {width: 15}, // Product Code
+                    {width: 10}, // Quantity
+                    {width: 12}  // Price
+                ];
+                
                 XLSX.utils.book_append_sheet(wb, ws, "Price Breaks");
                 XLSX.writeFile(wb, 'price_breaks.xlsx');
 
-                status.textContent = 'Excel file created successfully!';
+                status.textContent = `Excel file created successfully with ${allRows.length} entries!`;
                 status.className = 'success';
             } catch (error) {
                 console.error(error);
